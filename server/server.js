@@ -19,6 +19,12 @@ let gameState = {
   finishOrder: [], // Players who’ve finished this round
   roundActive: false,
 };
+let analytics = {
+  plays: [], // { playerId, cards, timestamp, valid }
+  passes: [], // { playerId, timestamp }
+  sessions: {}, // playerId -> { startTime, endTime }
+  errors: [], // { playerId, message, timestamp }
+};
 
 // Card Deck (simplified for demo)
 const deck = Array.from({ length: 108 }, (_, i) => i); // Frames 0-107
