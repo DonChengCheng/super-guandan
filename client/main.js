@@ -12,12 +12,39 @@ let playerHand = [],
   selectedCards = [],
   tableCards = [],
   opponentCards = [[], [], [], []];
-let playButton, socket, myId, myPosition, myTeam;
+let playButton, passButton, socket, myId, myPosition, myTeam, uniquePlayerId; // Add uniquePlayerId
 let isMyTurn = false;
 let players = [];
 let gamePaused = false; // Add state for paused game
 let disconnectedPlayers = {}; // Track disconnected players by position
 let statusText; // Add a variable for general status messages
+let analyticsText; // Declare analyticsText
+
+// --- Constants for Styling ---
+const COLORS = {
+    backgroundGradient: [0x1a1a1a, 0x2a2a2a, 0x2a2a2a, 0x1a1a1a], // Dark gradient
+    tableFill: 0x004d00, // Darker green
+    tableStroke: 0xeeeeee,
+    buttonIdle: 0x555555,
+    buttonHover: 0x777777,
+    buttonDisabled: 0x333333,
+    textPrimary: "#ffffff",
+    textHighlight: "#ffff00", // Yellow for turn/status
+    textError: "#ff4444", // Red for errors/paused
+    textInfo: "#cccccc", // Lighter grey for info
+    textTeamA: "#8888ff", // Lighter blue
+    textTeamB: "#ff8888", // Lighter red
+    cardSelectTint: 0x00ffff, // Cyan tint for selected cards
+};
+const FONT_SIZES = {
+    small: "16px",
+    medium: "20px",
+    large: "24px",
+    xlarge: "32px",
+    xxlarge: "48px",
+};
+// --- End Constants ---
+
 
 function preload() {
   this.load.spritesheet("cards", "assets/cards.png", {
@@ -36,102 +63,213 @@ function create() {
   const width = this.game.config.width;
   const height = this.game.config.height;
 
-  // Center table (scaled to fit)
-  this.add.rectangle(width / 2, height / 2, width * 0.4, height * 0.5, 0x006400);
+  // --- Background Gradient ---
+  this.add.graphics()
+      .fillGradientStyle(...COLORS.backgroundGradient, 1)
+      .fillRect(0, 0, width, height);
+  // --- End Background ---
 
-  // Team levels (top corners)
-  this.teamALevel = this.add.text(width * 0.05, height * 0.05, "Team A: 2", { fontSize: "24px", color: "#00f" });
-  this.teamBLevel = this.add.text(width * 0.95, height * 0.05, "Team B: 2", { fontSize: "24px", color: "#f00" }).setOrigin(1, 0);
+  // --- Game Table ---
+  const tableWidth = width * 0.4;
+  const tableHeight = height * 0.5;
+  const tableX = width / 2 - tableWidth / 2;
+  const tableY = height / 2 - tableHeight / 2;
+  const tableGraphics = this.add.graphics();
+  tableGraphics.fillStyle(COLORS.tableFill, 1);
+  tableGraphics.lineStyle(2, COLORS.tableStroke, 1);
+  tableGraphics.fillRoundedRect(tableX, tableY, tableWidth, tableHeight, 15);
+  tableGraphics.strokeRoundedRect(tableX, tableY, tableWidth, tableHeight, 15);
+  // --- End Game Table ---
 
-  // Turn indicator / Status Text (center, above table)
-  // Use a single text object for turn indication and status messages
-  statusText = this.add.text(width / 2, height * 0.4, "Waiting for players...", { fontSize: "32px", color: "#ff0", align: 'center' }).setOrigin(0.5);
 
-  // Analytics (bottom-left)
-  analyticsText = this.add.text(width * 0.05, height * 0.15, "Plays: 0\nErrors: 0\nAvg Turn: 0s", { fontSize: "20px", color: "#fff" });
+  // Team levels (top corners) - Adjusted styling
+  this.teamALevel = this.add.text(width * 0.05, height * 0.05, "Team A: 2", { fontSize: FONT_SIZES.large, color: COLORS.textTeamA, fontStyle: 'bold' });
+  this.teamBLevel = this.add.text(width * 0.95, height * 0.05, "Team B: 2", { fontSize: FONT_SIZES.large, color: COLORS.textTeamB, fontStyle: 'bold' }).setOrigin(1, 0);
 
-  // Pass and Play buttons (bottom-right)
-  const passButton = this.add.text(width * 0.85, height * 0.9, "Pass", { fontSize: "24px", color: "#fff" }).setInteractive();
-  playButton = this.add.text(width * 0.92, height * 0.9, "Play", { fontSize: "24px", color: "#ccc" }).setInteractive();
+  // Turn indicator / Status Text (center, above table) - Adjusted styling
+  statusText = this.add.text(width / 2, height * 0.35, "Waiting for players...", { fontSize: FONT_SIZES.xlarge, color: COLORS.textHighlight, align: 'center', fontStyle: 'bold' }).setOrigin(0.5);
+
+  // Analytics (bottom-left) - Adjusted styling
+  analyticsText = this.add.text(width * 0.05, height * 0.15, "Plays: 0\nErrors: 0\nAvg Turn: 0s", { fontSize: FONT_SIZES.small, color: COLORS.textInfo });
+
+  // --- Buttons ---
+  const buttonY = height * 0.95; // Move slightly lower
+  const buttonHeight = 40;
+  const buttonWidth = 100;
+  const buttonPadding = 10;
+  const cornerRadius = 10;
+
+  // Pass Button
+  const passButtonX = width * 0.85 - buttonWidth / 2;
+  const passButtonBg = this.add.graphics()
+      .fillStyle(COLORS.buttonIdle)
+      .fillRoundedRect(passButtonX, buttonY - buttonHeight / 2, buttonWidth, buttonHeight, cornerRadius);
+  const passButtonText = this.add.text(passButtonX + buttonWidth / 2, buttonY, "Pass", { fontSize: FONT_SIZES.large, color: COLORS.textPrimary }).setOrigin(0.5);
+  passButton = this.add.zone(passButtonX, buttonY - buttonHeight / 2, buttonWidth, buttonHeight).setOrigin(0).setInteractive();
+  passButton.setData({ bg: passButtonBg, text: passButtonText, enabled: false }); // Store references and state
+
+  // Play Button
+  const playButtonX = width * 0.92 - buttonWidth / 2;
+  const playButtonBg = this.add.graphics()
+      .fillStyle(COLORS.buttonDisabled) // Start disabled
+      .fillRoundedRect(playButtonX, buttonY - buttonHeight / 2, buttonWidth, buttonHeight, cornerRadius);
+  const playButtonText = this.add.text(playButtonX + buttonWidth / 2, buttonY, "Play", { fontSize: FONT_SIZES.large, color: COLORS.textInfo }).setOrigin(0.5); // Start disabled color
+  playButton = this.add.zone(playButtonX, buttonY - buttonHeight / 2, buttonWidth, buttonHeight).setOrigin(0).setInteractive();
+  playButton.setData({ bg: playButtonBg, text: playButtonText, enabled: false }); // Store references and state
+
+
+  // Button Interactions
+  [passButton, playButton].forEach(button => {
+      button.on('pointerover', () => {
+          if (button.getData('enabled')) {
+              button.getData('bg').clear().fillStyle(COLORS.buttonHover).fillRoundedRect(button.x, button.y, button.width, button.height, cornerRadius);
+          }
+      });
+      button.on('pointerout', () => {
+          const color = button.getData('enabled') ? COLORS.buttonIdle : COLORS.buttonDisabled;
+          button.getData('bg').clear().fillStyle(color).fillRoundedRect(button.x, button.y, button.width, button.height, cornerRadius);
+      });
+  });
 
   passButton.on("pointerdown", () => {
-    // Add check for gamePaused
-    if (isMyTurn && !gamePaused) {
-        socket.emit("pass");
-    }
+      if (passButton.getData('enabled')) {
+          socket.emit("pass");
+      }
   });
   playButton.on("pointerdown", () => {
-    // Add check for gamePaused
-    if (isMyTurn && !gamePaused && selectedCards.length) {
-        playCards.call(this);
-    }
+      if (playButton.getData('enabled')) {
+          playCards.call(this);
+      }
   });
-  passButton.on("pointerover", () => passButton.setStyle({ color: "#ff0" }));
-  passButton.on("pointerout", () => passButton.setStyle({ color: "#fff" }));
-  playButton.on("pointerover", () => playButton.setStyle({ color: selectedCards.length ? "#ff0" : "#ccc" }));
-  playButton.on("pointerout", () => playButton.setStyle({ color: selectedCards.length ? "#fff" : "#ccc" }));
+  // --- End Buttons ---
+
 
   socket = io("http://localhost:3000");
+
+  // --- Reconnection Attempt ---
+  uniquePlayerId = localStorage.getItem('guandanUniquePlayerId');
+  if (uniquePlayerId) {
+      console.log("Attempting reconnect with ID:", uniquePlayerId);
+      socket.emit('attemptReconnect', { uniquePlayerId });
+  } else {
+      console.log("No stored ID found, connecting as new player.");
+      // Server will handle as new player after timeout if no reconnect attempt received
+  }
+  // --- End Reconnection Attempt ---
+
+
   socket.on("assignPlayer", (data) => {
     myId = data.id;
     myPosition = data.position;
     myTeam = data.team;
+    uniquePlayerId = data.uniquePlayerId; // Store received unique ID
+    localStorage.setItem('guandanUniquePlayerId', uniquePlayerId); // Save to localStorage
+    console.log(`Assigned: ID=${myId}, Pos=${myPosition}, Team=${myTeam}, UniqueID=${uniquePlayerId}`);
     setupPlayerPositions.call(this);
   });
   socket.on("startRound", (state) => {
     players = state.players || [];
-    gamePaused = state.paused || false; // Reset paused state
-    disconnectedPlayers = {}; // Clear disconnected players list
+    gamePaused = state.paused || false;
+    disconnectedPlayers = {}; // Clear disconnected players list on new round
     console.log('startRound', state);
-    // Clear any persistent status messages from previous round/disconnects
+    // Clear any persistent status messages
     if (this.disconnectMessage) {
         this.disconnectMessage.destroy();
         this.disconnectMessage = null;
     }
     startRound.call(this, state);
-    // Update player texts immediately after starting round
-    updatePlayerTexts.call(this, state.hands);
+    updatePlayerTexts.call(this, state.hands, state.players); // Pass players array
   });
   socket.on("updateGame", (state) => {
-    players = state.players || players; // Update player list if provided
-    gamePaused = state.paused || false; // Update paused state
+    // Update local players array ONLY if state.players is provided
+    if (state.players) {
+        players = state.players;
+    }
+    gamePaused = state.paused || false;
     updateGame.call(this, state);
   });
   socket.on("endRound", (data) => endRound.call(this, data));
   socket.on("gameWin", (levels) => {
-    this.add.text(width / 2, height / 2, `Team ${levels.A >= 13 ? "A" : "B"} Wins!`, { fontSize: "48px", color: "#ff0" }).setOrigin(0.5);
+    statusText.setText(`Game Over! Team ${levels.A >= 13 ? "A" : "B"} Wins!`).setColor(COLORS.textHighlight).setFontSize(FONT_SIZES.xxlarge);
+    // Optionally disable buttons or show a restart option
   });
-  socket.on("playerLeft", (data) => {
-    // Store disconnected player info
-    disconnectedPlayers[data.position] = true;
-    console.log(`Player left at position: ${data.position}`);
 
-    // Update the specific player's text
-    if (this.playerTexts && this.playerTexts[data.position]) {
-        this.playerTexts[data.position].setText(`Position ${data.position + 1}: Disconnected`).setColor("#f00");
-        // Optionally hide their cards immediately
-        if (opponentCards[data.position]) {
-            opponentCards[data.position].forEach(c => c.setVisible(false));
-        }
-    }
-
-    // Display a general message if needed, but rely on updateGame for paused state
-    // Example: Add a temporary message (optional)
-    // if (!this.disconnectMessage) {
-    //     this.disconnectMessage = this.add.text(width / 2, height / 2, "A player disconnected.", { fontSize: "32px", color: "#f00" }).setOrigin(0.5).setDepth(10);
-    //     // Optional: Auto-remove message after a delay
-    //     this.time.delayedCall(3000, () => {
-    //         if (this.disconnectMessage) this.disconnectMessage.destroy();
-    //         this.disconnectMessage = null;
-    //     });
-    // }
-    // Note: The main "Game Paused" logic is handled in updateGame based on the state flag
+  // --- Updated Disconnect/Reconnect Listeners ---
+  socket.on("playerDisconnected", (data) => {
+      disconnectedPlayers[data.position] = true; // Mark as temporarily disconnected
+      console.log(`Player disconnected at position: ${data.position}`);
+      updatePlayerTexts.call(this, gameState?.hands || {}, players); // Update display
+      // Status text update is handled in updateGame based on 'paused' flag
   });
+
+  socket.on("playerReconnected", (data) => {
+      console.log(`Player reconnected at position: ${data.position}`);
+      delete disconnectedPlayers[data.position]; // Unmark as disconnected
+      // Server sends updateGame which will refresh the state and potentially unpause
+  });
+
+  socket.on("playerRemoved", (data) => {
+      console.log(`Player removed permanently from position: ${data.position}`);
+      disconnectedPlayers[data.position] = true; // Keep marked as disconnected visually
+      // Find player text and update to "Removed" or similar
+      if (this.playerTexts && this.playerTexts[data.position]) {
+          this.playerTexts[data.position].setText(`Position ${data.position + 1}: Removed`).setColor(COLORS.textError);
+          if (opponentCards[data.position]) {
+              opponentCards[data.position].forEach(c => c.setVisible(false));
+          }
+      }
+      // Server might send gameReset or updateGame
+  });
+
+  socket.on("gameReset", (data) => {
+      console.log("Game Reset:", data.message);
+      statusText.setText("Game Resetting...").setColor(COLORS.textError);
+      // Clear local state, maybe reload page or wait for new startRound
+      localStorage.removeItem('guandanUniquePlayerId'); // Clear stored ID on reset
+      myId = undefined;
+      myPosition = undefined;
+      myTeam = undefined;
+      uniquePlayerId = undefined;
+      players = [];
+      // Clear visual elements
+      playerHand.forEach(c => c.destroy()); playerHand = [];
+      tableCards.forEach(c => c.destroy()); tableCards = [];
+      opponentCards.forEach(arr => arr.forEach(c => c.destroy())); opponentCards = [[],[],[],[]];
+      if (this.playerTexts) this.playerTexts.forEach(t => t.destroy()); this.playerTexts = null;
+      // Show waiting message
+      statusText.setText("Waiting for new game...").setColor(COLORS.textHighlight);
+  });
+  // --- End Disconnect/Reconnect Listeners ---
+
+
   socket.on("invalidPlay", (msg) => {
-    this.add.text(width / 2, height * 0.6, msg, { fontSize: "24px", color: "#f00" }).setOrigin(0.5).setDepth(10);
+    // Show temporary error message near status text
+    const errorText = this.add.text(width / 2, height * 0.45, msg, { fontSize: FONT_SIZES.medium, color: COLORS.textError }).setOrigin(0.5).setDepth(10);
+    this.time.delayedCall(2000, () => errorText.destroy()); // Remove after 2 seconds
   });
   socket.on("analyticsUpdate", (data) => {
-    analyticsText.setText(`Plays: ${data.playCount}\nErrors: ${data.errorCount}\nAvg Turn: ${(data.avgTurnTime / 1000).toFixed(1)}s`);
+    // analyticsText.setText(`Plays: ${data.playCount}\nErrors: ${data.errorCount}\nAvg Turn: ${(data.avgTurnTime / 1000).toFixed(1)}s`);
+  });
+  socket.on("connect_error", (err) => {
+      console.error("Connection Error:", err.message);
+      statusText.setText("Connection Failed!").setColor(COLORS.textError);
+  });
+  socket.on("disconnect", (reason) => {
+      console.log("Disconnected:", reason);
+      if (reason !== "io server disconnect") { // Don't show pause if server kicked us (e.g., game full)
+          statusText.setText("Disconnected. Attempting to reconnect...").setColor(COLORS.textError);
+          gamePaused = true; // Assume paused state visually on disconnect
+          updatePlayButtonStates(); // Disable buttons
+      }
+  });
+  socket.on("connect", () => {
+      console.log("Connected successfully.");
+      statusText.setText("Connected. Waiting for assignment...").setColor(COLORS.textHighlight);
+      // If we had a uniquePlayerId, try reconnecting again
+      if (uniquePlayerId && !myId) { // Check if not already assigned (prevents double emit)
+          console.log("Re-attempting reconnect after successful connection.");
+          socket.emit('attemptReconnect', { uniquePlayerId });
+      }
   });
 }
 
@@ -139,24 +277,34 @@ function setupPlayerPositions() {
   const width = this.game.config.width;
   const height = this.game.config.height;
 
+  // Destroy existing texts if they exist (e.g., on reconnect/reset)
+  if (this.playerTexts) {
+      this.playerTexts.forEach(container => container.destroy());
+  }
+  this.playerTexts = []; // Reset array
+
+  // Define relative positions
   const positions = [
-    { x: width / 2, y: height * 0.9, text: "You" }, // Bottom (Player 0)
-    { x: width * 0.05, y: height / 2, text: "Opponent" }, // Left (Player 1)
-    { x: width / 2, y: height * 0.1, text: myPosition % 2 === 0 ? "Teammate" : "Opponent" }, // Top (Player 2)
-    { x: width * 0.95, y: height / 2, text: "Opponent" }, // Right (Player 3)
+      { x: 0.5, y: 0.85, angle: 0 },   // Bottom (Player 0 - You)
+      { x: 0.15, y: 0.5, angle: -90 }, // Left (Player 1)
+      { x: 0.5, y: 0.15, angle: 180 }, // Top (Player 2)
+      { x: 0.85, y: 0.5, angle: 90 }   // Right (Player 3)
   ];
 
-  this.playerTexts = positions.map((pos, i) => {
-    const text = this.add.text(pos.x, pos.y - (i === 0 ? -height * 0.05 : height * 0.05), `${pos.text}: 0`, { fontSize: "20px", color: "#fff" }).setOrigin(0.5);
-    if (i === 1) {
-      text.setAngle(-90);
-    } else if (i === 2) {
-      text.setAngle(180);
-    } else if (i === 3) {
-      text.setAngle(90);
-    }
-    return text;
-  });
+  // Create text containers for better alignment and background
+  for (let i = 0; i < 4; i++) {
+      const playerIndex = (myPosition + i) % 4; // Calculate actual player position index
+      const displayPos = positions[i]; // Position on screen relative to 'You'
+
+      const container = this.add.container(width * displayPos.x, height * displayPos.y);
+      const text = this.add.text(0, 0, `Position ${playerIndex + 1}: ? cards`, { fontSize: FONT_SIZES.medium, color: COLORS.textInfo }).setOrigin(0.5);
+      // Optional: Add a background rectangle for readability
+      // const bg = this.add.graphics().fillStyle(0x000000, 0.5).fillRect(text.x - text.width / 2 - 5, text.y - text.height / 2 - 3, text.width + 10, text.height + 6);
+      // container.add(bg);
+      container.add(text);
+      container.angle = displayPos.angle;
+      this.playerTexts[playerIndex] = container; // Store container by actual position index
+  }
 }
 function getCardInfo(frame) {
   if (frame >= 104) {
@@ -208,51 +356,53 @@ function sortCards(hand) {
 function startRound(state) {
   const width = this.game.config.width;
   const height = this.game.config.height;
-  const cardScale = Math.min(width, height) / 720;
+  const cardScale = Math.min(width, height) / 900; // Slightly smaller cards
 
-  // Clear any previous status text related to pausing or disconnection
-  statusText.setText("").setColor("#ff0"); // Reset status text
+  // Clear status text
+  statusText.setText("").setColor(COLORS.textHighlight);
 
-  playerHand.forEach(c => c.destroy());
-  playerHand = [];
-  tableCards.forEach(c => c.destroy());
-  tableCards = [];
+  // Clear old game objects
+  playerHand.forEach(c => c.destroy()); playerHand = [];
+  selectedCards = []; // Clear selection
+  tableCards.forEach(c => c.destroy()); tableCards = [];
   opponentCards.forEach(cards => cards.forEach(c => c.destroy()));
-  opponentCards = [[], [], [], []];
+  opponentCards = [[], [], [], []]; // Reinitialize opponent card arrays
 
-  // Reset player text visuals
+  // Reset player text visuals (will be updated by updatePlayerTexts)
   if (this.playerTexts) {
-      this.playerTexts.forEach((text, i) => {
-          // Reset text content and color (will be updated by updatePlayerTexts)
-          text.setText(`Position ${i + 1}: ?`).setColor("#fff");
-          // Ensure opponent cards area is ready (will be populated by updateGame)
-          if (opponentCards[i]) opponentCards[i] = [];
+      this.playerTexts.forEach((container, i) => {
+          if (container) {
+              const text = container.list[0]; // Assuming text is the first element
+              text.setText(`Position ${i + 1}: ? cards`).setColor(COLORS.textInfo);
+          }
       });
+  } else {
+      // If playerTexts aren't set up yet (e.g., very fast startRound before assignPlayer)
+      setupPlayerPositions.call(this);
   }
 
   const hand = state.hands[myId];
   if (!hand) {
     console.error("Hand not found for myId:", myId);
+    statusText.setText("Error: Hand not received!").setColor(COLORS.textError);
     return;
   }
 
-  // Sort the hand
+  // Sort and display hand
   const sortedHand = sortCards(hand);
-  const handWidth = Math.min(40, (width * 0.7) / (sortedHand.length - 1));
+  const totalHandWidth = width * 0.6; // Max width for hand display
+  const cardOverlap = 45 * cardScale; // Overlap cards slightly
+  const requiredWidth = sortedHand.length * cardOverlap - (cardOverlap - 70 * cardScale); // Calculate width needed
+  const startX = width / 2 - Math.min(totalHandWidth, requiredWidth) / 2; // Center the hand display
+  const displaySpacing = Math.min(cardOverlap, totalHandWidth / Math.max(1, sortedHand.length -1)); // Calculate spacing
+
   for (let i = 0; i < sortedHand.length; i++) {
-    let card = this.add.sprite(width * 0.25 + i * handWidth, height * 0.9, "cards", sortedHand[i]).setInteractive();
-    card.setScale(1.2 * cardScale);
+    let card = this.add.sprite(startX + i * displaySpacing, height * 0.85, "cards", sortedHand[i]).setInteractive(); // Lower hand slightly
+    card.setScale(cardScale);
+    card.setData('originalY', card.y); // Store original Y for selection animation
     card.on("pointerdown", () => selectCard.call(this, card));
-    card.on("pointerover", () => {
-      if (selectedCards.indexOf(card) === -1) { // Only apply hover tint if not selected
-        card.setTint(0xcccccc);
-      }
-    });
-    card.on("pointerout", () => {
-      if (selectedCards.indexOf(card) === -1) { // Only clear tint if not selected
-        card.clearTint();
-      }
-    });
+    card.on("pointerover", () => { if (!card.getData('selected')) card.setTint(0xcccccc); });
+    card.on("pointerout", () => { if (!card.getData('selected')) card.clearTint(); });
     playerHand.push(card);
   }
 
@@ -263,150 +413,218 @@ function startRound(state) {
 function updateGame(state) {
   const width = this.game.config.width;
   const height = this.game.config.height;
-  const cardScale = Math.min(width, height) / 720;
+  const cardScale = Math.min(width, height) / 900; // Consistent card scale
 
-  // Update paused state based on received state
+  // Ensure player assignment is complete
+  if (myId === undefined || myPosition === undefined) {
+      console.log("updateGame received before player assignment, waiting...");
+      statusText.setText("Connecting...").setColor(COLORS.textHighlight);
+      return;
+  }
+
+  // Update local game state variables
   gamePaused = state.paused || false;
+  if (state.players) players = state.players; // Update players array if provided
 
-  if (!players || players.length === 0 || state.currentTurn === undefined) {
-    console.warn("Players or currentTurn not ready:", players, state.currentTurn);
-    isMyTurn = false;
-    statusText.setText("Waiting for players...").setColor("#ff0");
-    return;
+  // Safety check for essential state data
+  if (!players || players.length === 0 || state.currentTurn === undefined || !state.levels) {
+      console.warn("updateGame: Incomplete state received:", state);
+      // Avoid full update if state is bad, maybe show error
+      if (!gamePaused) statusText.setText("Waiting for state...").setColor(COLORS.textHighlight);
+      return;
   }
 
   // Find the player object for the current turn based on position
-  const currentPlayer = players.find(p => p.position === state.currentTurn);
+  const currentPlayer = players.find(p => p.position === state.currentTurn && !p.disconnected); // Check disconnected status too
 
   isMyTurn = currentPlayer && currentPlayer.id === myId && state.roundActive && !gamePaused;
 
   // Update Status Text / Turn Indicator
   if (gamePaused) {
-      statusText.setText("Game Paused - Player Disconnected").setColor("#f00");
+      statusText.setText("Game Paused").setColor(COLORS.textError).setFontSize(FONT_SIZES.xlarge);
   } else if (!state.roundActive) {
-      statusText.setText("Round Over").setColor("#fff"); // Or specific end round message
+      // Check for win condition first
+      if (state.levels.A >= 13 || state.levels.B >= 13) {
+          statusText.setText(`Game Over! Team ${state.levels.A >= 13 ? "A" : "B"} Wins!`).setColor(COLORS.textHighlight).setFontSize(FONT_SIZES.xxlarge);
+      } else {
+          statusText.setText("Round Over").setColor(COLORS.textInfo).setFontSize(FONT_SIZES.xlarge);
+      }
   } else if (currentPlayer) {
-      statusText.setText(isMyTurn ? "Your Turn" : `Player ${state.currentTurn + 1}'s Turn`).setColor(isMyTurn ? "#0f0" : "#ff0");
+      statusText.setText(isMyTurn ? "Your Turn" : `Player ${state.currentTurn + 1}'s Turn`).setColor(isMyTurn ? COLORS.textHighlight : COLORS.textInfo).setFontSize(FONT_SIZES.xlarge);
   } else {
-      // Handle case where currentTurn position might not have a player (e.g., after disconnect)
-      statusText.setText("Waiting...").setColor("#ff0");
-      console.log(`No player found at current turn position: ${state.currentTurn}`);
+      // Handle case where currentTurn position might not have a player (e.g., after disconnect and before advanceTurn)
+      statusText.setText("Waiting...").setColor(COLORS.textInfo).setFontSize(FONT_SIZES.xlarge);
+      console.log(`No active player found at current turn position: ${state.currentTurn}`);
   }
 
+  // Update Team Levels
   this.teamALevel.setText(`Team A: ${state.levels.A}`);
   this.teamBLevel.setText(`Team B: ${state.levels.B}`);
 
   // Update table cards
   tableCards.forEach(c => c.destroy());
-  tableCards = state.table.map((frame, i) =>
-    this.add.sprite(width / 2 + i * 80 - (state.table.length - 1) * 40, height / 2, "cards", frame).setScale(cardScale)
-  );
+  tableCards = [];
+  if (state.table && state.table.length > 0) {
+      const tableSpacing = 60 * cardScale; // Spacing for table cards
+      const tableStartX = width / 2 - (state.table.length - 1) * tableSpacing / 2;
+      tableCards = state.table.map((frame, i) =>
+          this.add.sprite(tableStartX + i * tableSpacing, height / 2, "cards", frame).setScale(cardScale)
+      );
+  }
 
   // Update player texts and opponent card backs
-  updatePlayerTexts.call(this, state.hands); // Use helper function
+  updatePlayerTexts.call(this, state.hands, players); // Pass players array
 
-  // Update Play/Pass button states based on turn and paused status
-  updatePlayButton();
-  passButton.setStyle({ color: isMyTurn && !gamePaused ? "#fff" : "#ccc" });
+  // Update Play/Pass button states
+  updatePlayButtonStates();
 }
 
 // Helper function to update player texts and opponent cards
-function updatePlayerTexts(hands) {
+function updatePlayerTexts(hands, currentPlayers) {
     const width = this.game.config.width;
     const height = this.game.config.height;
-    const cardScale = Math.min(width, height) / 720;
+    const cardScale = Math.min(width, height) / 900; // Consistent scale
 
-    if (!this.playerTexts) return; // Guard against calls before setup
+    if (!this.playerTexts || !currentPlayers) return; // Guard against calls before setup or missing data
 
-    players.forEach(player => {
+    // Clear existing opponent cards first
+    opponentCards.forEach(cards => cards.forEach(c => c.destroy()));
+    opponentCards = [[], [], [], []]; // Reinitialize
+
+    currentPlayers.forEach(player => {
         const pos = player.position;
-        const handCount = hands[player.id]?.length ?? 0; // Get hand count safely
+        const handCount = hands[player.id]?.length ?? 0;
+        const container = this.playerTexts[pos];
 
-        if (disconnectedPlayers[pos]) {
-            // Keep disconnected status if player left
-            this.playerTexts[pos].setText(`Position ${pos + 1}: Disconnected`).setColor("#f00");
-            if (opponentCards[pos]) {
-                opponentCards[pos].forEach(c => c.setVisible(false)); // Ensure cards are hidden
-            }
+        if (!container) return; // Skip if text container doesn't exist for this position
+
+        const textElement = container.list[0]; // Assuming text is first element
+
+        if (player.disconnected) {
+            textElement.setText(`Position ${pos + 1}: Disconnected`).setColor(COLORS.textError);
+            // Keep opponent cards hidden (already cleared)
         } else {
             // Update text for active players
             const playerType = pos === myPosition ? "You" : (player.team === myTeam ? "Teammate" : "Opponent");
-            const botIndicator = player.isBot ? " (Bot)" : ""; // Add bot indicator
-            this.playerTexts[pos].setText(`${playerType}${botIndicator}: ${handCount}`).setColor("#fff"); // Reset color
+            const botIndicator = player.isBot ? " (Bot)" : "";
+            textElement.setText(`${playerType}${botIndicator}: ${handCount} cards`).setColor(COLORS.textPrimary);
 
-            // Update opponent card backs
+            // Update opponent card backs (if not 'You')
             if (pos !== myPosition) {
-                opponentCards[pos].forEach(c => c.destroy()); // Clear old cards
-                opponentCards[pos] = [];
-                const offset = pos === 1 || pos === 3 ? height / 2 : height * 0.1;
-                const isVertical = pos === 1 || pos === 3;
-                // Adjust spacing based on card count to prevent excessive overlap
-                const maxVisibleCards = 15; // Limit visible back cards for performance/clarity
+                const displayPosIndex = (pos - myPosition + 4) % 4; // Index in positions array relative to 'You'
+                const displayPos = [
+                    { x: 0.5, y: 0.85, angle: 0 },   // Bottom (You) - Not used here
+                    { x: 0.15, y: 0.5, angle: -90 }, // Left
+                    { x: 0.5, y: 0.15, angle: 180 }, // Top
+                    { x: 0.85, y: 0.5, angle: 90 }   // Right
+                ][displayPosIndex];
+
+                const isVertical = displayPos.angle !== 0 && displayPos.angle !== 180;
+                const maxVisibleCards = 15;
                 const displayCount = Math.min(handCount, maxVisibleCards);
-                const totalSpan = isVertical ? height * 0.5 : width * 0.4; // Available space
-                const spacing = displayCount > 1 ? Math.min(20, totalSpan / (displayCount - 1)) : 0;
+                const totalSpan = isVertical ? height * 0.4 : width * 0.3; // Available space for cards
+                const cardOverlap = 15 * cardScale; // How much cards overlap
+                const requiredSpan = displayCount * cardOverlap - (cardOverlap - 70 * cardScale * 0.8); // Width/Height needed
+                const startOffset = (isVertical ? height : width) * displayPos.y - Math.min(totalSpan, requiredSpan) / 2; // Center the group
+                const spacing = Math.min(cardOverlap, totalSpan / Math.max(1, displayCount -1));
 
                 for (let i = 0; i < displayCount; i++) {
                     let card = this.add.sprite(
-                        pos === 1 ? width * 0.05 : pos === 3 ? width * 0.95 : width / 2 + i * spacing - (displayCount - 1) * spacing / 2,
-                        isVertical ? offset + i * spacing - (displayCount - 1) * spacing / 2 : offset,
+                        isVertical ? width * displayPos.x : startOffset + i * spacing,
+                        isVertical ? startOffset + i * spacing : height * displayPos.y,
                         "card_back"
-                    ).setScale(0.8 * cardScale);
-                    if (isVertical) card.setAngle(90);
-                    opponentCards[pos].push(card);
+                    ).setScale(0.8 * cardScale); // Slightly smaller backs
+                    card.setAngle(displayPos.angle);
+                    opponentCards[pos].push(card); // Store by actual position
                 }
             }
         }
     });
 
-    // Ensure texts for positions without players (if any) are cleared or handled
+    // Handle empty slots (if player array doesn't have 4 players)
     for (let i = 0; i < 4; i++) {
-        if (!players.find(p => p.position === i) && !disconnectedPlayers[i]) {
-             if (this.playerTexts[i]) this.playerTexts[i].setText(`Position ${i+1}: Empty`).setColor("#888");
-             if (opponentCards[i]) {
-                 opponentCards[i].forEach(c => c.destroy());
-                 opponentCards[i] = [];
+        if (!currentPlayers.find(p => p.position === i)) {
+             if (this.playerTexts[i]) {
+                 const textElement = this.playerTexts[i].list[0];
+                 textElement.setText(`Position ${i+1}: Empty`).setColor(COLORS.textInfo);
              }
+             // Opponent cards already cleared
         }
     }
 }
 
+
 function selectCard(card) {
   const index = selectedCards.indexOf(card);
+  const originalY = card.getData('originalY');
+  const selectedYOffset = -20; // Move card up when selected
+
   if (index === -1) {
-    console.log("Selecting card:", card.frame.name);
+    // Select
     selectedCards.push(card);
-    card.setTint(0x00ffff);
-    
+    card.setTint(COLORS.cardSelectTint);
+    card.setData('selected', true);
+    // Animate up
+    this.tweens.add({ targets: card, y: originalY + selectedYOffset, duration: 100, ease: 'Power1' });
   } else {
-    console.log("Deselecting card:", card.frame.name);
+    // Deselect
     selectedCards.splice(index, 1);
     card.clearTint();
-  
+    card.setData('selected', false);
+    // Animate back down
+    this.tweens.add({ targets: card, y: originalY, duration: 100, ease: 'Power1' });
   }
-  updatePlayButton();
+  updatePlayButtonStates(); // Update button state after selection change
 }
 
 function playCards() {
-  const cards = selectedCards.map(c => c.frame.name);
-  socket.emit("play", { cards });
-  selectedCards.forEach(c => c.clearTint());
-  selectedCards = [];
-  updatePlayButton();
+  const cardsToPlay = selectedCards.map(c => c.frame.name);
+  socket.emit("play", { cards: cardsToPlay });
+
+  // Animate played cards towards the center (optional) then destroy
+  selectedCards.forEach(card => {
+      card.disableInteractive(); // Prevent further interaction
+      this.tweens.add({
+          targets: card,
+          x: this.game.config.width / 2,
+          y: this.game.config.height / 2,
+          scale: card.scale * 0.5, // Shrink
+          alpha: 0, // Fade out
+          duration: 300,
+          ease: 'Power1',
+          onComplete: () => card.destroy()
+      });
+  });
+
+  // Remove played cards from hand array immediately
+  playerHand = playerHand.filter(card => !selectedCards.includes(card));
+  selectedCards = []; // Clear selection
+  updatePlayButtonStates(); // Update button state
 }
 
-function updatePlayButton() {
-  // Enable play button only if it's my turn, game is not paused, and cards are selected
-  const enabled = isMyTurn && !gamePaused && selectedCards.length > 0;
-  playButton.setStyle({ color: enabled ? "#fff" : "#ccc" });
+// Centralized function to update button appearance and enabled state
+function updatePlayButtonStates() {
+    const canPlay = isMyTurn && !gamePaused;
+    const playEnabled = canPlay && selectedCards.length > 0;
+
+    // Pass Button
+    passButton.setData('enabled', canPlay);
+    passButton.getData('bg').clear().fillStyle(canPlay ? COLORS.buttonIdle : COLORS.buttonDisabled).fillRoundedRect(passButton.x, passButton.y, passButton.width, passButton.height, 10);
+    passButton.getData('text').setColor(canPlay ? COLORS.textPrimary : COLORS.textInfo);
+
+    // Play Button
+    playButton.setData('enabled', playEnabled);
+    playButton.getData('bg').clear().fillStyle(playEnabled ? COLORS.buttonIdle : COLORS.buttonDisabled).fillRoundedRect(playButton.x, playButton.y, playButton.width, playButton.height, 10);
+    playButton.getData('text').setColor(playEnabled ? COLORS.textPrimary : COLORS.textInfo);
 }
+
 
 function endRound(data) {
-  const width = this.game.config.width;
-  const height = this.game.config.height;
-  this.add.text(width / 2, height / 2, `Round Over\n${data.message}`, { fontSize: "32px", color: "#fff" }).setOrigin(0.5);
+  // Display round end message, maybe clear table
+  statusText.setText("Round Over!").setColor(COLORS.textInfo).setFontSize(FONT_SIZES.xlarge);
+  // Server will send startRound shortly if game continues
 }
 
 function update() {
-
+  // Main update loop (if needed for continuous updates)
 }
