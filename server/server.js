@@ -119,111 +119,111 @@ io.on("connection", (socket) => {
       }
 
       // Simulate bot players (ensure bots also get unique IDs)
-      if (players.filter(p => !p.disconnected && !p.isBot).length === 1 && players.filter(p => !p.disconnected).length === 1) {
-          console.log("First real player joined. Adding 3 bots.");
-          for (let i = 1; i < 4; i++) {
-              const botSocket = ioClient(baseUrl, { forceNew: true });
-              const botUniqueId = generateUniqueId(); // Bot unique ID
+      // if (players.filter(p => !p.disconnected && !p.isBot).length === 1 && players.filter(p => !p.disconnected).length === 1) {
+      //     console.log("First real player joined. Adding 3 bots.");
+      //     for (let i = 1; i < 4; i++) {
+      //         const botSocket = ioClient(baseUrl, { forceNew: true });
+      //         const botUniqueId = generateUniqueId(); // Bot unique ID
 
-              botSocket.on("connect", () => {
-                  const botPosition = players.length;
-                  if (botPosition >= 4) {
-                      console.warn(`Attempted to add bot ${i} but game is already full.`);
-                      botSocket.disconnect();
-                      return;
-                  }
-                  const botTeam = botPosition % 2 === 0 ? "A" : "B";
-                  const botPlayer = {
-                      id: botSocket.id, // Bot's socket ID
-                      position: botPosition,
-                      team: botTeam,
-                      isBot: true,
-                      uniquePlayerId: botUniqueId, // Store unique ID for bot too
-                      disconnected: false,
-                      disconnectTime: null
-                  };
-                  players.push(botPlayer);
+      //         botSocket.on("connect", () => {
+      //             const botPosition = players.length;
+      //             if (botPosition >= 4) {
+      //                 console.warn(`Attempted to add bot ${i} but game is already full.`);
+      //                 botSocket.disconnect();
+      //                 return;
+      //             }
+      //             const botTeam = botPosition % 2 === 0 ? "A" : "B";
+      //             const botPlayer = {
+      //                 id: botSocket.id, // Bot's socket ID
+      //                 position: botPosition,
+      //                 team: botTeam,
+      //                 isBot: true,
+      //                 uniquePlayerId: botUniqueId, // Store unique ID for bot too
+      //                 disconnected: false,
+      //                 disconnectTime: null
+      //             };
+      //             players.push(botPlayer);
 
-                  console.log(
-                      `Bot ${i} connected: ${botSocket.id}, Position ${botPosition}, Team ${botTeam}, UniqueID ${botUniqueId}`
-                  );
+      //             console.log(
+      //                 `Bot ${i} connected: ${botSocket.id}, Position ${botPosition}, Team ${botTeam}, UniqueID ${botUniqueId}`
+      //             );
 
-                  botSocket.emit("assignPlayer", {
-                      id: botSocket.id,
-                      position: botPosition,
-                      team: botTeam,
-                      uniquePlayerId: botUniqueId // Send ID to bot client if needed
-                  });
+      //             botSocket.emit("assignPlayer", {
+      //                 id: botSocket.id,
+      //                 position: botPosition,
+      //                 team: botTeam,
+      //                 uniquePlayerId: botUniqueId // Send ID to bot client if needed
+      //             });
 
-                  if (players.filter(p => !p.disconnected).length === 4 && !gameState.roundActive && !gameState.paused) {
-                      console.log(`Fourth player (bot ${i}) joined. Starting round.`);
-                      startRound();
-                  }
+      //             if (players.filter(p => !p.disconnected).length === 4 && !gameState.roundActive && !gameState.paused) {
+      //                 console.log(`Fourth player (bot ${i}) joined. Starting round.`);
+      //                 startRound();
+      //             }
 
-                  // Bot logic listeners...
-                  botSocket.on("updateGame", (state) => {
-                      // ... existing bot play logic ...
-                      // Ensure bot logic checks if game is paused: if (state.roundActive && !state.paused && ...)
-                      const currentPlayer = players.find(p => p.position === state.currentTurn);
-                      if (state.roundActive && !state.paused && currentPlayer && currentPlayer.id === botSocket.id) {
-                          const hand = state.hands[botSocket.id];
-                          if (!hand || hand.length === 0) return;
+      //             // Bot logic listeners...
+      //             botSocket.on("updateGame", (state) => {
+      //                 // ... existing bot play logic ...
+      //                 // Ensure bot logic checks if game is paused: if (state.roundActive && !state.paused && ...)
+      //                 const currentPlayer = players.find(p => p.position === state.currentTurn);
+      //                 if (state.roundActive && !state.paused && currentPlayer && currentPlayer.id === botSocket.id) {
+      //                     const hand = state.hands[botSocket.id];
+      //                     if (!hand || hand.length === 0) return;
 
-                          const validPairs = [];
-                          for (let k = 0; k < hand.length - 1; k++) {
-                            for (let j = k + 1; j < hand.length; j++) {
-                              if (Math.floor(hand[k] / 4) === Math.floor(hand[j] / 4)) {
-                                validPairs.push([hand[k], hand[j]]);
-                              }
-                            }
-                          }
+      //                     const validPairs = [];
+      //                     for (let k = 0; k < hand.length - 1; k++) {
+      //                       for (let j = k + 1; j < hand.length; j++) {
+      //                         if (Math.floor(hand[k] / 4) === Math.floor(hand[j] / 4)) {
+      //                           validPairs.push([hand[k], hand[j]]);
+      //                         }
+      //                       }
+      //                     }
 
-                          if (Math.random() > 0.3 && validPairs.length > 0) {
-                            const cardsToPlay = validPairs[0];
-                            console.log(`Bot ${i} (${botSocket.id}) playing:`, cardsToPlay);
-                            botSocket.emit("play", { cards: cardsToPlay });
-                          } else {
-                            console.log(`Bot ${i} (${botSocket.id}) passing.`);
-                            botSocket.emit("pass");
-                          }
-                      }
-                  });
-                  botSocket.on("assignPlayer", (data) => {
-                    console.log(
-                      `Bot ${i} (${botSocket.id}) received assignment confirmation: Position ${data.position}, Team ${data.team}`
-                    );
-                  });
+      //                     if (Math.random() > 0.3 && validPairs.length > 0) {
+      //                       const cardsToPlay = validPairs[0];
+      //                       console.log(`Bot ${i} (${botSocket.id}) playing:`, cardsToPlay);
+      //                       botSocket.emit("play", { cards: cardsToPlay });
+      //                     } else {
+      //                       console.log(`Bot ${i} (${botSocket.id}) passing.`);
+      //                       botSocket.emit("pass");
+      //                     }
+      //                 }
+      //             });
+      //             botSocket.on("assignPlayer", (data) => {
+      //               console.log(
+      //                 `Bot ${i} (${botSocket.id}) received assignment confirmation: Position ${data.position}, Team ${data.team}`
+      //               );
+      //             });
 
-                  botSocket.on("disconnect", () => {
-                    console.log(`Bot ${i} disconnected: ${botSocket.id}`);
-                    const botIndex = players.findIndex((p) => p.id === botSocket.id);
-                    if (botIndex !== -1) {
-                      players.splice(botIndex, 1);
-                      io.emit("playerLeft", botSocket.id);
-                      console.log(`Bot ${botSocket.id} removed from players.`);
-                      if (gameState.roundActive) {
-                        console.log(
-                          "Bot disconnected during active round. Stopping round."
-                        );
-                        gameState.roundActive = false;
-                        io.emit("updateGame", {
-                          ...gameState,
-                          players: players.map((p) => ({
-                            id: p.id,
-                            position: p.position,
-                            team: p.team,
-                          })),
-                        });
-                      }
-                    }
-                  });
+      //             botSocket.on("disconnect", () => {
+      //               console.log(`Bot ${i} disconnected: ${botSocket.id}`);
+      //               const botIndex = players.findIndex((p) => p.id === botSocket.id);
+      //               if (botIndex !== -1) {
+      //                 players.splice(botIndex, 1);
+      //                 io.emit("playerLeft", botSocket.id);
+      //                 console.log(`Bot ${botSocket.id} removed from players.`);
+      //                 if (gameState.roundActive) {
+      //                   console.log(
+      //                     "Bot disconnected during active round. Stopping round."
+      //                   );
+      //                   gameState.roundActive = false;
+      //                   io.emit("updateGame", {
+      //                     ...gameState,
+      //                     players: players.map((p) => ({
+      //                       id: p.id,
+      //                       position: p.position,
+      //                       team: p.team,
+      //                     })),
+      //                   });
+      //                 }
+      //               }
+      //             });
 
-                  botSocket.on("connect_error", (err) => {
-                    console.error(`Bot ${i} connection error:`, err.message);
-                  });
-              });
-          }
-      }
+      //             botSocket.on("connect_error", (err) => {
+      //               console.error(`Bot ${i} connection error:`, err.message);
+      //             });
+      //         });
+      //     }
+      // }
   }
 
   // --- Initial connection attempt ---

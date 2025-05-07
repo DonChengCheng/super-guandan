@@ -86,8 +86,8 @@ function create() {
   this.teamALevel = this.add.text(width * 0.05, height * 0.05, "Team A: 2", { fontSize: FONT_SIZES.large, color: COLORS.textTeamA, fontStyle: 'bold' });
   this.teamBLevel = this.add.text(width * 0.95, height * 0.05, "Team B: 2", { fontSize: FONT_SIZES.large, color: COLORS.textTeamB, fontStyle: 'bold' }).setOrigin(1, 0);
 
-  // Turn indicator / Status Text (center, above table) - Adjusted styling
-  statusText = this.add.text(width / 2, height * 0.35, "Waiting for players...", { fontSize: FONT_SIZES.xlarge, color: COLORS.textHighlight, align: 'center', fontStyle: 'bold' }).setOrigin(0.5);
+  // Turn indicator / Status Text (center, slightly lower) - Adjusted styling
+  statusText = this.add.text(width / 2, height * 0.4, "Waiting for players...", { fontSize: FONT_SIZES.xlarge, color: COLORS.textHighlight, align: 'center', fontStyle: 'bold' }).setOrigin(0.5);
 
   // Analytics (bottom-left) - Adjusted styling
   analyticsText = this.add.text(width * 0.05, height * 0.15, "Plays: 0\nErrors: 0\nAvg Turn: 0s", { fontSize: FONT_SIZES.small, color: COLORS.textInfo });
@@ -276,6 +276,7 @@ function create() {
 function setupPlayerPositions() {
   const width = this.game.config.width;
   const height = this.game.config.height;
+  const padding = width * 0.02; // Padding from edges
 
   // Destroy existing texts if they exist (e.g., on reconnect/reset)
   if (this.playerTexts) {
@@ -283,12 +284,16 @@ function setupPlayerPositions() {
   }
   this.playerTexts = []; // Reset array
 
-  // Define relative positions
+  // Define relative positions and text alignment anchors
   const positions = [
-      { x: 0.5, y: 0.85, angle: 0 },   // Bottom (Player 0 - You)
-      { x: 0.15, y: 0.5, angle: -90 }, // Left (Player 1)
-      { x: 0.5, y: 0.15, angle: 180 }, // Top (Player 2)
-      { x: 0.85, y: 0.5, angle: 90 }   // Right (Player 3)
+      // You (Bottom Center)
+      { x: 0.5, y: 0.95, anchorX: 0.5, anchorY: 1 },
+      // Left Player
+      { x: padding, y: 0.5, anchorX: 0, anchorY: 0.5 },
+      // Top Player (Teammate)
+      { x: 0.5, y: padding, anchorX: 0.5, anchorY: 0 },
+      // Right Player
+      { x: 1 - padding, y: 0.5, anchorX: 1, anchorY: 0.5 }
   ];
 
   // Create text containers for better alignment and background
@@ -297,12 +302,17 @@ function setupPlayerPositions() {
       const displayPos = positions[i]; // Position on screen relative to 'You'
 
       const container = this.add.container(width * displayPos.x, height * displayPos.y);
-      const text = this.add.text(0, 0, `Position ${playerIndex + 1}: ? cards`, { fontSize: FONT_SIZES.medium, color: COLORS.textInfo }).setOrigin(0.5);
+      const text = this.add.text(0, 0, `Position ${playerIndex + 1}: ? cards`, { fontSize: FONT_SIZES.medium, color: COLORS.textInfo })
+          .setOrigin(displayPos.anchorX, displayPos.anchorY); // Set origin based on anchor
+
       // Optional: Add a background rectangle for readability
-      // const bg = this.add.graphics().fillStyle(0x000000, 0.5).fillRect(text.x - text.width / 2 - 5, text.y - text.height / 2 - 3, text.width + 10, text.height + 6);
-      // container.add(bg);
+      // const bgPadding = 5;
+      // const bg = this.add.graphics().fillStyle(0x000000, 0.5)
+      //     .fillRect(text.x - displayPos.anchorX * text.width - bgPadding, text.y - displayPos.anchorY * text.height - bgPadding, text.width + bgPadding*2, text.height + bgPadding*2);
+      // container.add(bg); // Add background behind text
+
       container.add(text);
-      container.angle = displayPos.angle;
+      // container.angle = displayPos.angle; // REMOVED ANGLE
       this.playerTexts[playerIndex] = container; // Store container by actual position index
   }
 }
@@ -484,6 +494,7 @@ function updatePlayerTexts(hands, currentPlayers) {
     const width = this.game.config.width;
     const height = this.game.config.height;
     const cardScale = Math.min(width, height) / 900; // Consistent scale
+    const cardPadding = 5 * cardScale; // Padding between cards and text
 
     if (!this.playerTexts || !currentPlayers) return; // Guard against calls before setup or missing data
 
@@ -512,29 +523,60 @@ function updatePlayerTexts(hands, currentPlayers) {
             // Update opponent card backs (if not 'You')
             if (pos !== myPosition) {
                 const displayPosIndex = (pos - myPosition + 4) % 4; // Index in positions array relative to 'You'
-                const displayPos = [
-                    { x: 0.5, y: 0.85, angle: 0 },   // Bottom (You) - Not used here
-                    { x: 0.15, y: 0.5, angle: -90 }, // Left
-                    { x: 0.5, y: 0.15, angle: 180 }, // Top
-                    { x: 0.85, y: 0.5, angle: 90 }   // Right
-                ][displayPosIndex];
 
-                const isVertical = displayPos.angle !== 0 && displayPos.angle !== 180;
                 const maxVisibleCards = 15;
                 const displayCount = Math.min(handCount, maxVisibleCards);
-                const totalSpan = isVertical ? height * 0.4 : width * 0.3; // Available space for cards
-                const cardOverlap = 15 * cardScale; // How much cards overlap
-                const requiredSpan = displayCount * cardOverlap - (cardOverlap - 70 * cardScale * 0.8); // Width/Height needed
-                const startOffset = (isVertical ? height : width) * displayPos.y - Math.min(totalSpan, requiredSpan) / 2; // Center the group
-                const spacing = Math.min(cardOverlap, totalSpan / Math.max(1, displayCount -1));
+                const backCardScale = 0.7 * cardScale; // Make backs even smaller
+                const backCardWidth = 70 * backCardScale;
+                const backCardHeight = 95 * backCardScale;
+                const cardOverlap = 10 * backCardScale; // Adjust overlap for smaller cards
+
+                // Calculate the total span needed for the cards
+                const requiredSpan = displayCount > 0 ? (displayCount - 1) * cardOverlap + backCardWidth : 0;
+
+                // Get text bounds for positioning cards relative to text
+                const textBounds = textElement.getBounds();
+                let groupStartX, groupStartY;
+
+                // Position cards based on player position relative to 'You'
+                switch (displayPosIndex) {
+                    case 1: // Left Player
+                        groupStartX = textBounds.right + cardPadding;
+                        groupStartY = textBounds.centerY - (requiredSpan / 2); // Center vertically
+                        break;
+                    case 2: // Top Player
+                        groupStartX = textBounds.centerX - (requiredSpan / 2); // Center horizontally
+                        groupStartY = textBounds.bottom + cardPadding;
+                        break;
+                    case 3: // Right Player
+                        groupStartX = textBounds.left - cardPadding - requiredSpan; // Align right edge of group
+                        groupStartY = textBounds.centerY - (requiredSpan / 2); // Center vertically
+                        break;
+                }
+
 
                 for (let i = 0; i < displayCount; i++) {
-                    let card = this.add.sprite(
-                        isVertical ? width * displayPos.x : startOffset + i * spacing,
-                        isVertical ? startOffset + i * spacing : height * displayPos.y,
-                        "card_back"
-                    ).setScale(0.8 * cardScale); // Slightly smaller backs
-                    card.setAngle(displayPos.angle);
+                    // Draw cards horizontally for top/bottom, vertically for left/right (relative to screen)
+                    let cardX = (displayPosIndex === 1 || displayPosIndex === 3) ? groupStartX + i * cardOverlap : groupStartX + i * cardOverlap;
+                    let cardY = (displayPosIndex === 1 || displayPosIndex === 3) ? groupStartY + i * cardOverlap : groupStartY; // Stacking horizontally for top player
+
+                    // Adjust position based on side for clarity
+                     if (displayPosIndex === 1) { // Left
+                         cardX = groupStartX; // Align left edge
+                         cardY = groupStartY + i * cardOverlap;
+                     } else if (displayPosIndex === 2) { // Top
+                         cardX = groupStartX + i * cardOverlap;
+                         cardY = groupStartY; // Align top edge
+                     } else if (displayPosIndex === 3) { // Right
+                         cardX = groupStartX + requiredSpan - backCardWidth - i * cardOverlap; // Align right edge, draw leftwards
+                         cardY = groupStartY + i * cardOverlap;
+                     }
+
+
+                    let card = this.add.sprite(cardX, cardY, "card_back")
+                        .setScale(backCardScale)
+                        .setOrigin(0, 0); // Use top-left origin for easier positioning
+
                     opponentCards[pos].push(card); // Store by actual position
                 }
             }
@@ -600,7 +642,47 @@ function playCards() {
   playerHand = playerHand.filter(card => !selectedCards.includes(card));
   selectedCards = []; // Clear selection
   updatePlayButtonStates(); // Update button state
+
+  // --- Add Card Rearrangement Logic ---
+  rearrangeHand.call(this);
+  // --- End Card Rearrangement Logic ---
 }
+
+// --- Add New Function to Rearrange Hand ---
+function rearrangeHand() {
+    const width = this.game.config.width;
+    const height = this.game.config.height;
+    const cardScale = Math.min(width, height) / 900;
+
+    // Recalculate layout based on remaining cards
+    const remainingHand = playerHand; // Already filtered in playCards
+    const totalHandWidth = width * 0.6;
+    const cardOverlap = 45 * cardScale;
+    const requiredWidth = remainingHand.length > 0 ? (remainingHand.length -1) * cardOverlap + (70 * cardScale) : 0; // Width of one card if only one remains
+    const startX = width / 2 - Math.min(totalHandWidth, requiredWidth) / 2;
+    const displaySpacing = remainingHand.length > 1 ? Math.min(cardOverlap, totalHandWidth / (remainingHand.length - 1)) : 0; // No spacing if 1 card
+    const targetY = height * 0.85; // Original Y position for hand cards
+
+    remainingHand.forEach((card, i) => {
+        const targetX = startX + i * displaySpacing;
+        // Animate card to its new position
+        this.tweens.add({
+            targets: card,
+            x: targetX,
+            y: targetY, // Ensure card returns to base Y level
+            duration: 200, // Quick animation
+            ease: 'Power1',
+            onComplete: () => {
+                card.setData('originalY', targetY); // Update originalY after move
+            }
+        });
+        // Ensure card tint is cleared if it was selected (should be cleared by playCards, but belt-and-suspenders)
+        card.clearTint();
+        card.setData('selected', false);
+    });
+}
+// --- End New Function ---
+
 
 // Centralized function to update button appearance and enabled state
 function updatePlayButtonStates() {
