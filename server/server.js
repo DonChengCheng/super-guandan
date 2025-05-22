@@ -253,31 +253,31 @@ io.on("connection", (socket) => {
               `Player ${socket.id} (Pos ${leavingPlayer.position}, UniqueID ${leavingPlayer.uniquePlayerId}, Bot: ${leavingPlayer.isBot}) marked as disconnected.`
           );
           // Notify clients that player is disconnected (client can show different state)
-          io.emit("playerDisconnected", { position: leavingPlayer.position, id: socket.id });
+          // Send uniquePlayerId as well, as client might use this to differentiate players if socket IDs change
+          io.emit("playerDisconnected", { position: leavingPlayer.position, id: socket.id, uniquePlayerId: leavingPlayer.uniquePlayerId });
 
-          // If a REAL player disconnects during an active game, pause it.
-          if (!leavingPlayer.isBot && wasRoundActive) {
+          let turnAdvanced = false; // Flag to track if turn was advanced
+
+          // If a player (REAL or BOT) disconnects during an active, unpaused game, pause it.
+          if (wasRoundActive) { // wasRoundActive implies gameState.roundActive && !gameState.paused
               gameState.paused = true;
-              console.log(`Real player left during active round. Pausing game.`);
+              console.log(`Player (Bot: ${leavingPlayer.isBot}) left during active round. Pausing game.`);
 
               // If the leaving player was the current turn, advance it
+              // Make sure there are other players left who are not disconnected to advance to
               if (leavingPlayer.position === gameState.currentTurn && players.filter(p => !p.disconnected).length > 0) {
-                  console.log(`Advancing turn from disconnected player ${leavingPlayer.position}`)
-                  advanceTurn(); // Advance turn *after* marking as disconnected
-              }
-          } else if (leavingPlayer.isBot && wasRoundActive) {
-              // Option 1: Pause on bot disconnect too (like real players)
-              gameState.paused = true;
-              console.log(`Bot left during active round. Pausing game.`);
-              if (leavingPlayer.position === gameState.currentTurn && players.filter(p => !p.disconnected).length > 0) {
+                  console.log(`Advancing turn from disconnected player ${leavingPlayer.position}`);
+                  // Advance turn *before* the main updateGame emit, but *after* player is marked disconnected and game paused
                   advanceTurn();
+                  turnAdvanced = true; // Mark that turn has been advanced
               }
-              // Option 2: Original logic - Stop round (commented out)
-              // gameState.roundActive = false;
-              // console.log("Bot disconnected during active round. Stopping round.");
           }
+          // No 'else if' needed here for bot behavior - general pause logic above covers it.
+          // The decision to stop the round completely if a bot disconnects is removed in favor of pausing.
+          // Permanent removal and round ending due to insufficient players will be handled by checkReconnectionTimeout.
 
           // Always update game state for all clients after a disconnect/pause
+          // This emit now includes the potentially advanced turn and the paused state
           io.emit("updateGame", {
               ...gameState,
               players: players.map(p => ({
@@ -387,34 +387,81 @@ io.on("connection", (socket) => {
 function checkReconnectionTimeout(uniquePlayerId) {
     const player = players.find(p => p.uniquePlayerId === uniquePlayerId);
     if (player && player.disconnected && (Date.now() - player.disconnectTime >= RECONNECT_TIMEOUT)) {
-        console.log(`Player ${player.uniquePlayerId} (Pos ${player.position}) timed out. Removing permanently.`);
+            console.log(`Player ${player.uniquePlayerId} (Pos ${player.position}, ID ${player.id}) timed out. Removing permanently.`);
+
+            // Store player ID for cleanup before removing from array
+            const removedPlayerId = player.id;
+            const removedPlayerPosition = player.position;
+            const removedPlayerUniqueId = player.uniquePlayerId;
 
         // Remove player permanently
         const playerIndex = players.findIndex(p => p.uniquePlayerId === uniquePlayerId);
         if (playerIndex !== -1) {
             players.splice(playerIndex, 1);
 
-            // Notify clients of permanent removal
-            io.emit("playerRemoved", { position: player.position, uniquePlayerId: player.uniquePlayerId });
+                // 1. Remove player's cards from gameState.hands
+                if (gameState.hands[removedPlayerId]) {
+                    console.log(`Removing hand for timed-out player ${removedPlayerId}`);
+                    delete gameState.hands[removedPlayerId];
+                }
 
-            // If game was paused due to this player, and now cannot continue (e.g., < 4 players), handle game end/reset
-            if (gameState.paused) {
-                 const activePlayers = players.filter(p => !p.disconnected);
-                 if (activePlayers.length < 4) { // Or your minimum required players
-                     console.log("Game cannot continue after player timeout. Resetting.");
-                     // Reset game state or handle appropriately
-                     gameState.roundActive = false;
-                     gameState.paused = false;
-                     // players = []; // Or handle differently
-                     io.emit("gameReset", { message: "Game reset due to player timeout." });
-                 }
+                // Notify clients of permanent removal - send uniqueId and old socket id if needed by client
+                io.emit("playerRemoved", { position: removedPlayerPosition, uniquePlayerId: removedPlayerUniqueId, id: removedPlayerId });
+
+                // 2. If game is active, re-evaluate if it can continue
+                if (gameState.roundActive) {
+                    const activePlayers = players.filter(p => !p.disconnected);
+                    if (activePlayers.length < 4) { // Assuming 4 players are required
+                        console.log("Game cannot continue with less than 4 players after timeout. Ending round.");
+                        gameState.roundActive = false;
+                        gameState.paused = false; // Unpause if it was paused
+                        // Consider a more robust game reset or specific "ended due to player leaving" state
+                        io.emit("gameReset", { message: "Round ended: Not enough players to continue after a player timed out." });
+                        // Potentially clear other game state like table, currentTurn etc.
+                        // gameState.table = [];
+                        // gameState.currentTurn = -1; // Or some invalid state
+                    } else {
+                        // Game can continue, check if the removed player was the current turn
+                        if (gameState.currentTurn === removedPlayerPosition) {
+                            console.log(`Player ${removedPlayerPosition} was current turn. Advancing turn.`);
+                            advanceTurn(); // Advance turn to the next available player
+                        }
+                    }
+                } else if (gameState.paused) { // If round wasn't active but game was paused (e.g. pre-round lobby)
+                    const activePlayers = players.filter(p => !p.disconnected);
+                    if (activePlayers.length < 4 && activePlayers.length > 0) { // Check if it was paused waiting for players
+                         console.log("Game was paused waiting for players, and a player timed out. Still not enough players.");
+                         // Potentially emit an update or just keep it paused
+                    } else if (activePlayers.length === 0) {
+                        console.log("All players have left or timed out. Resetting game state.");
+                        gameState.roundActive = false;
+                        gameState.paused = false;
+                        gameState.table = [];
+                        gameState.hands = {};
+                        gameState.currentTurn = 0;
+                        gameState.finishOrder = [];
+                        // players array is already updated
+                        io.emit("gameReset", { message: "All players left. Game reset." });
+                    }
             }
-             // Update game state for remaining players
-             io.emit("updateGame", {
-                 ...gameState,
-                 players: players.map(p => ({ id: p.id, position: p.position, team: p.team, isBot: p.isBot, disconnected: p.disconnected })),
-             });
 
+
+                // 4. If the removed player was the last one to play, clear gameState.table
+                if (gameState.lastPlayerId === removedPlayerId) {
+                    console.log(`Removed player ${removedPlayerId} was the last to play. Clearing table.`);
+                    gameState.table = [];
+                    // No need to set lastPlayerId to null, as new play will set it.
+                }
+
+                // Update game state for remaining players
+                // This emit should reflect all changes: player list, hands (implicitly via full update), table, turn.
+                io.emit("updateGame", {
+                    ...gameState,
+                    players: players.map(p => ({ id: p.id, position: p.position, team: p.team, isBot: p.isBot, disconnected: p.disconnected })),
+                });
+
+            } else {
+                console.warn(`Tried to remove timed-out player ${uniquePlayerId}, but they were not found in the players array.`);
         }
     }
 }

@@ -209,16 +209,54 @@ function create() {
   });
 
   socket.on("playerRemoved", (data) => {
-      console.log(`Player removed permanently from position: ${data.position}`);
-      disconnectedPlayers[data.position] = true; // Keep marked as disconnected visually
-      // Find player text and update to "Removed" or similar
-      if (this.playerTexts && this.playerTexts[data.position]) {
-          this.playerTexts[data.position].setText(`Position ${data.position + 1}: Removed`).setColor(COLORS.textError);
-          if (opponentCards[data.position]) {
-              opponentCards[data.position].forEach(c => c.setVisible(false));
-          }
-      }
-      // Server might send gameReset or updateGame
+    console.log(`Player removed permanently: Position ${data.position}, ID ${data.id}, UniqueID ${data.uniquePlayerId}`);
+    
+    // Mark as permanently removed for UI purposes
+    // We can use disconnectedPlayers for this, or add a new structure if needed.
+    // For now, using disconnectedPlayers and a specific text update is fine.
+    disconnectedPlayers[data.position] = true; 
+
+    // Update the specific player's text label
+    if (this.playerTexts && this.playerTexts[data.position]) {
+        const playerTextContainer = this.playerTexts[data.position];
+        if (playerTextContainer && playerTextContainer.list && playerTextContainer.list[0]) {
+            playerTextContainer.list[0].setText(`Position ${data.position + 1}: Left Game`).setColor(COLORS.textError);
+        }
+    }
+
+    // Remove their visible cards (opponent card backs)
+    if (opponentCards[data.position]) {
+        opponentCards[data.position].forEach(cardSprite => cardSprite.destroy()); // Use destroy() for permanent removal
+        opponentCards[data.position] = []; // Clear the array
+    }
+
+    // Display a general message in the main status area
+    // Make sure statusText is available and not overwritten by other immediate updates
+    if (statusText) {
+        // Append or set a temporary message.
+        // Avoid interfering if game is paused or round is over, as statusText might be showing that.
+        if (!gamePaused && players.find(p => p.id === myId && !p.disconnected)) { // Only if current player is active
+             // Adding a temporary message that disappears
+            const removalMsg = this.add.text(this.game.config.width / 2, this.game.config.height * 0.45, `Player at position ${data.position + 1} has left.`, { fontSize: FONT_SIZES.medium, color: COLORS.textInfo, backgroundColor: '#333333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setDepth(10);
+            this.time.delayedCall(3000, () => removalMsg.destroy());
+        }
+    }
+    
+    // The server will typically send an 'updateGame' or 'gameReset' shortly after,
+    // which will refresh the overall game state. This handler primarily updates the UI immediately.
+    // If the removed player was 'myPosition', the game should effectively end for this client or
+    // they'd be moved to a spectator mode (not implemented here).
+    // The server handles game logic like ending the round if not enough players.
+
+    // If the removed player is the current player, it's a more critical scenario.
+    // For now, the server handles game state; client just reflects.
+    if (data.position === myPosition) {
+        statusText.setText("You have been removed from the game.").setColor(COLORS.textError);
+        // Potentially disable all interactions
+        playButton.setData('enabled', false);
+        passButton.setData('enabled', false);
+        playerHand.forEach(card => card.disableInteractive());
+    }
   });
 
   socket.on("gameReset", (data) => {
