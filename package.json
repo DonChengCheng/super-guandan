@@ -2,12 +2,26 @@
   "name": "super-guandan",
   "version": "1.0.0",
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "dev:clean": "./scripts/start-dev.sh",
+    "kill-port": "lsof -ti:3000 | xargs kill -9 2>/dev/null || echo 'Port 3000 is free'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint server/ --ext .js",
+    "lint:fix": "eslint server/ --ext .js --fix"
   },
   "dependencies": {
+    "@playwright/test": "^1.53.2",
     "express": "^4.21.2",
     "phaser": "^3.88.2",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.4"
   }
 }

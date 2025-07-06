@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>简单测试</title>
+</head>
+<body>
+  <h1>简单游戏测试</h1>
+  <div id="status">连接中...</div>
+  <div id="debug"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const status = document.getElementById('status');
+    const debug = document.getElementById('debug');
+    
+    function log(msg) {
+      console.log(msg);
+      debug.innerHTML += msg + '<br>';
+    }
+
+    // 清除本地存储以避免重连问题
+    localStorage.removeItem('guandanUniquePlayerId');
+    
+    const socket = io();
+    let myId, myPosition;
+
+    socket.on('connect', () => {
+      log(`✅ 连接成功: ${socket.id}`);
+      status.textContent = '已连接';
+      // 强制作为新玩家
+      socket.emit('forceNewPlayer');
+    });
+
+    socket.on('assignPlayer', (data) => {
+      myId = data.id;
+      myPosition = data.position;
+      log(`=== assignPlayer ===`);
+      log(`Assigned: ID=${myId}, Pos=${myPosition}, Team=${data.team}`);
+      log(`socket.id=${socket.id}, data.id=${data.id}, match=${socket.id === data.id}`);
+    });
+
+    socket.on('startRound', (state) => {
+      log(`\n=== startRound Debug ===`);
+      log(`myId: ${myId}`);
+      log(`socket.id: ${socket.id}`);
+      log(`myId === socket.id: ${myId === socket.id}`);
+      log(`state.hands exists: ${!!state.hands}`);
+      
+      if (state.hands) {
+        log(`state.hands keys: [${Object.keys(state.hands).join(', ')}]`);
+        log(`state.hands[myId]: ${state.hands[myId] ? `Array(${state.hands[myId].length})` : 'undefined'}`);
+        log(`state.hands[socket.id]: ${state.hands[socket.id] ? `Array(${state.hands[socket.id].length})` : 'undefined'}`);
+        
+        const hand = state.hands[myId];
+        if (!hand) {
+          log(`❌ Hand not found for myId: ${myId}`);
+          log(`❌ Available hands for: [${Object.keys(state.hands).join(', ')}]`);
+          status.textContent = '错误：未收到牌！';
+        } else {
+          log(`✅ Hand found! Length: ${hand.length}`);
+          status.textContent = `收到 ${hand.length} 张牌`;
+        }
+      } else {
+        log(`❌ state.hands does not exist!`);
+        status.textContent = '错误：无手牌数据';
+      }
+    });
+
+    socket.on('gameFull', () => {
+      log('❌ 游戏已满');
+      status.textContent = '游戏已满';
+    });
+
+    socket.on('disconnect', () => {
+      log('❌ 连接断开');
+      status.textContent = '连接断开';
+    });
+  </script>
+</body>
+</html>

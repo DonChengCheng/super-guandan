@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>掼蛋调试 - 检查手牌数据</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { 
+      margin: 20px; 
+      font-family: 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #00ff00;
+    }
+    .log {
+      background: #000;
+      padding: 10px;
+      border: 1px solid #333;
+      margin: 10px 0;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .error { color: #ff4444; }
+    .info { color: #4444ff; }
+    .success { color: #44ff44; }
+  </style>
+</head>
+<body>
+  <h1>🐛 掼蛋游戏调试控制台</h1>
+  <div id="status">连接中...</div>
+  <div id="log" class="log"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const log = document.getElementById('log');
+    const status = document.getElementById('status');
+    
+    function addLog(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const logEntry = `[${timestamp}] ${message}\n`;
+      log.innerHTML += `<span class="${type}">${logEntry}</span>`;
+      log.scrollTop = log.scrollHeight;
+      console.log(message);
+    }
+
+    // 连接到服务器
+    const socket = io();
+    let myId, myPosition;
+
+    socket.on('connect', () => {
+      myId = socket.id;
+      addLog(`✅ 连接成功: ${myId}`, 'success');
+      status.textContent = '已连接';
+    });
+
+    socket.on('assignPlayer', (data) => {
+      myPosition = data.position;
+      addLog(`👤 玩家分配: 位置 ${data.position}, 队伍 ${data.team}, ID: ${data.id}`, 'success');
+    });
+
+    socket.on('startRound', (state) => {
+      addLog('🎮 收到 startRound 事件', 'info');
+      addLog(`   📊 state.hands 存在: ${!!state.hands}`, 'info');
+      
+      if (state.hands) {
+        addLog(`   🔑 state.hands 的键: [${Object.keys(state.hands).join(', ')}]`, 'info');
+        addLog(`   📏 每个玩家的牌数: [${Object.values(state.hands).map(h => h?.length || 0).join(', ')}]`, 'info');
+        addLog(`   🎯 我的ID: ${myId}`, 'info');
+        addLog(`   💳 我的手牌存在: ${!!state.hands[myId]}`, state.hands[myId] ? 'success' : 'error');
+        
+        if (state.hands[myId]) {
+          addLog(`   📈 我的手牌数量: ${state.hands[myId].length}`, 'success');
+          addLog(`   🃏 前5张牌: [${state.hands[myId].slice(0, 5).join(', ')}]`, 'info');
+        } else {
+          addLog(`   ❌ 我的手牌未找到！`, 'error');
+          addLog(`   🔍 可用的手牌ID: [${Object.keys(state.hands).join(', ')}]`, 'error');
+        }
+      } else {
+        addLog(`   ❌ state.hands 不存在！`, 'error');
+      }
+    });
+
+    socket.on('updateGame', (state) => {
+      if (state.hands && state.hands[myId]) {
+        addLog(`🔄 updateGame: 手牌数量 ${state.hands[myId].length}`, 'info');
+      }
+    });
+
+    socket.on('gameFull', () => {
+      addLog('❌ 游戏已满', 'error');
+      status.textContent = '游戏已满';
+    });
+
+    socket.on('disconnect', () => {
+      addLog('❌ 连接断开', 'error');
+      status.textContent = '连接断开';
+    });
+
+    // 监听所有事件进行调试
+    const originalEmit = socket.emit;
+    socket.emit = function(...args) {
+      addLog(`📤 发送: ${args[0]} ${JSON.stringify(args.slice(1))}`, 'info');
+      return originalEmit.apply(this, args);
+    };
+
+    // 捕获所有接收的事件
+    const originalOn = socket.on;
+    socket.on = function(event, handler) {
+      return originalOn.call(this, event, (...args) => {
+        if (event !== 'startRound' && event !== 'updateGame') {
+          addLog(`📥 接收: ${event} ${JSON.stringify(args)}`, 'info');
+        }
+        return handler(...args);
+      });
+    };
+  </script>
+</body>
+</html>

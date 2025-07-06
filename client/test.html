@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>DNG 尺寸读取器 (稳健版)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #result { margin-top: 20px; font-size: 1.2em; color: #333; }
+        #error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>在浏览器中获取 DNG 图片的实际尺寸</h1>
+    <p>请选择一个 .dng 文件：</p>
+    <input type="file" id="dng-file-input" accept=".dng">
+    
+    <div id="result"></div>
+    <div id="error"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/exifreader@4.21.0/dist/exif-reader.min.js"></script>
+    
+    <script>
+        const fileInput = document.getElementById('dng-file-input');
+        const resultDiv = document.getElementById('result');
+        const errorDiv = document.getElementById('error');
+
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            // 清空之前的结果
+            resultDiv.textContent = '读取中...';
+            errorDiv.textContent = '';
+            
+            try {
+                // ExifReader可以直接加载文件对象，非常方便
+                const tags = await ExifReader.load(file);
+                
+                // DNG/TIFF的尺寸信息通常存储在 'Image Width' 和 'Image Height' 标签中
+                // 注意：标签名有空格
+                const width = tags['Image Width']?.value;
+                const height = tags['Image Height']?.value;
+                
+                if (width && height) {
+                    resultDiv.textContent = `✅ 成功读取! 实际尺寸为: ${width} x ${height} 像素`;
+                } else {
+                    // 如果主标签找不到，可能是子IFD中。通常exifreader会处理好。
+                    // 但以防万一，提供一个备用方案。
+                    // 比如，SubIFDs中的 Image Width
+                    const subWidth = tags['SubIFDs']?.[0]?.['Image Width']?.value;
+                    const subHeight = tags['SubIFDs']?.[0]?.['Image Height']?.value;
+                    if (subWidth && subHeight) {
+                         resultDiv.textContent = `✅ 成功读取(来自SubIFD)! 实际尺寸为: ${subWidth} x ${subHeight} 像素`;
+                    } else {
+                         throw new Error('未能在文件中找到有效的宽度和高度标签。');
+                    }
+                }
+
+                console.log('所有解析出的标签:', tags);
+
+            } catch (err) {
+                console.error(err);
+                errorDiv.textContent = `❌ 读取失败: ${err.message}. 这个文件可能已损坏或格式不受支持。`;
+                resultDiv.textContent = ''; // 清空"读取中"
+            }
+        });
+    </script>
+</body>
+</html>

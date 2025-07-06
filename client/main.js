@@ -13,7 +13,9 @@ const config = {
     roundPixels: false,
     powerPreference: 'high-performance',
     clearBeforeRender: true,
-    premultipliedAlpha: false
+    premultipliedAlpha: false,
+    multiSample: 4,
+    batchSize: 4096
   }
 };
 
@@ -24,6 +26,7 @@ let playerHand = [],
   tableCards = [],
   opponentCards = [[], [], [], []];
 let playButton, passButton, tributeButton, returnTributeButton, socket, myId, myPosition, myTeam, uniquePlayerId; // Add uniquePlayerId
+let connectionStatus = null;  // Connection status indicator
 let isMyTurn = false;
 let players = [];
 let gamePaused = false; // Add state for paused game
@@ -68,17 +71,14 @@ function preload() {
     frameHeight: 95,
   });
   this.load.image("card_back", "assets/card_back.png");
-  this.load.script(
-    "socketio",
-    "//cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"
-  );
+  // Socket.IO is already loaded in HTML
   
-  // Set texture filtering for crisp rendering
+  // Set texture filtering for high-quality rendering
   this.load.on('filecomplete-spritesheet-cards', () => {
-    this.textures.get('cards').setFilter(Phaser.Textures.NEAREST);
+    this.textures.get('cards').setFilter(Phaser.Textures.LINEAR);
   });
   this.load.on('filecomplete-image-card_back', () => {
-    this.textures.get('card_back').setFilter(Phaser.Textures.NEAREST);
+    this.textures.get('card_back').setFilter(Phaser.Textures.LINEAR);
   });
 }
 
@@ -109,6 +109,13 @@ function create() {
   // Team levels (top corners) - Adjusted styling
   this.teamALevel = this.add.text(width * 0.05, height * 0.05, "A队: 2", { fontSize: FONT_SIZES.large, color: COLORS.textTeamA, fontStyle: 'bold' });
   this.teamBLevel = this.add.text(width * 0.95, height * 0.05, "B队: 2", { fontSize: FONT_SIZES.large, color: COLORS.textTeamB, fontStyle: 'bold' }).setOrigin(1, 0);
+  
+  // Add connection status indicator
+  connectionStatus = this.add.text(width * 0.02, height * 0.98, '', { 
+    fontSize: FONT_SIZES.small, 
+    color: COLORS.textInfo 
+  }).setOrigin(0, 1);
+  this.connectionStatus = connectionStatus;  // Store reference for later use
 
   // Turn indicator / Status Text (center, slightly lower) - Adjusted styling
   statusText = this.add.text(width / 2, height * 0.4, "等待玩家加入...", { fontSize: FONT_SIZES.xlarge, color: COLORS.textHighlight, align: 'center', fontStyle: 'bold' }).setOrigin(0.5);
@@ -203,17 +210,28 @@ function create() {
   // --- End Buttons ---
 
 
-  socket = io("http://localhost:3000");
+  socket = io("http://localhost:3000", {
+    // Connection stability settings
+    reconnection: true,          // Enable auto-reconnection
+    reconnectionAttempts: 10,    // Try 10 times before giving up
+    reconnectionDelay: 1000,     // Start with 1 second delay
+    reconnectionDelayMax: 5000,  // Max delay between reconnections
+    timeout: 20000,              // Connection timeout (20 seconds)
+    
+    // Transport settings - prioritize WebSocket
+    transports: ['websocket', 'polling'],
+    
+    // Upgrade from long-polling to WebSocket when possible
+    upgrade: true,
+    
+    // Force new connection (don't reuse existing)
+    forceNew: true
+  });
 
   // --- Reconnection Attempt ---
-  uniquePlayerId = localStorage.getItem('guandanUniquePlayerId');
-  if (uniquePlayerId) {
-      console.log("Attempting reconnect with ID:", uniquePlayerId);
-      socket.emit('attemptReconnect', { uniquePlayerId });
-  } else {
-      console.log("No stored ID found, connecting as new player.");
-      // Server will handle as new player after timeout if no reconnect attempt received
-  }
+  // TEMPORARY FIX: Clear localStorage to avoid reconnection issues
+  localStorage.removeItem('guandanUniquePlayerId');
+  console.log("DEBUG: Cleared localStorage, connecting as new player.");
   // --- End Reconnection Attempt ---
 
 
@@ -222,7 +240,8 @@ function create() {
     myPosition = data.position;
     myTeam = data.team;
     uniquePlayerId = data.uniquePlayerId; // Store received unique ID
-    localStorage.setItem('guandanUniquePlayerId', uniquePlayerId); // Save to localStorage
+    // Temporarily disable localStorage to fix reconnection issues
+    // localStorage.setItem('guandanUniquePlayerId', uniquePlayerId); // Save to localStorage
     console.log(`Assigned: ID=${myId}, Pos=${myPosition}, Team=${myTeam}, UniqueID=${uniquePlayerId}`);
     
     // Update status to show waiting for other players
@@ -234,12 +253,13 @@ function create() {
     players = state.players || [];
     gamePaused = state.paused || false;
     disconnectedPlayers = {}; // Clear disconnected players list on new round
-    console.log('startRound', state);
+    console.log('startRound received');
     // Clear any persistent status messages
     if (this.disconnectMessage) {
         this.disconnectMessage.destroy();
         this.disconnectMessage = null;
     }
+    
     startRound.call(this, state);
     updatePlayerTexts.call(this, state.hands, state.players); // Pass players array
   });
@@ -336,25 +356,30 @@ function create() {
   socket.on("connect_error", (error) => {
     statusText.setText("连接错误，重试中...").setColor(COLORS.textError);
     console.error("Connection error:", error);
+    connectionStatus.setText("⚠️ 连接错误").setColor(COLORS.textError);
   });
 
   socket.on("disconnect", (reason) => {
     statusText.setText("与服务器断开连接").setColor(COLORS.textError);
     console.log("Disconnected:", reason);
+    connectionStatus.setText("🔴 已断开").setColor(COLORS.textError);
   });
 
   socket.on("reconnect", (attemptNumber) => {
     statusText.setText("已重新连接到服务器").setColor(COLORS.textHighlight);
     console.log("Reconnected after", attemptNumber, "attempts");
+    connectionStatus.setText("🟢 已重连").setColor(COLORS.textHighlight);
   });
 
   socket.on("reconnect_attempt", (attemptNumber) => {
     statusText.setText(`重新连接中... (${attemptNumber})`).setColor(COLORS.textInfo);
+    connectionStatus.setText(`🟡 重连中(${attemptNumber})`).setColor(COLORS.textInfo);
   });
 
   socket.on("reconnect_error", (error) => {
     statusText.setText("重新连接失败").setColor(COLORS.textError);
     console.error("Reconnection error:", error);
+    connectionStatus.setText("⚠️ 重连失败").setColor(COLORS.textError);
   });
 
   // --- Updated Disconnect/Reconnect Listeners ---
@@ -428,6 +453,7 @@ function create() {
   socket.on("connect", () => {
       console.log("Connected successfully.");
       statusText.setText("已连接，等待分配...").setColor(COLORS.textHighlight);
+      connectionStatus.setText("🟢 已连接").setColor(COLORS.textHighlight);
       // If we had a uniquePlayerId, try reconnecting again
       if (uniquePlayerId && !myId) { // Check if not already assigned (prevents double emit)
           console.log("Re-attempting reconnect after successful connection.");
@@ -565,20 +591,59 @@ function startRound(state) {
       setupPlayerPositions.call(this);
   }
 
+  
+  console.log('DEBUG startRound: myId =', myId);
+  console.log('DEBUG startRound: socket.id =', socket.id);
+  console.log('DEBUG startRound: state.hands keys =', Object.keys(state.hands || {}));
+  
   const hand = state.hands[myId];
   if (!hand) {
     console.error("Hand not found for myId:", myId);
+    console.error("Available hands for:", Object.keys(state.hands || {}));
+    console.error("Trying socket.id as fallback:", socket.id);
+    
+    // Try using socket.id as fallback
+    const fallbackHand = state.hands[socket.id];
+    if (fallbackHand) {
+      console.log("Found hand using socket.id, using fallback");
+      myId = socket.id; // Update myId to match
+      statusText.setText("游戏开始！").setColor(COLORS.textHighlight);
+    } else {
+      statusText.setText("错误：未收到牌！").setColor(COLORS.textError);
+      return;
+    }
+  }
+
+  const finalHand = state.hands[myId];
+  if (!finalHand || finalHand.length === 0) {
+    console.error("Hand is empty for myId:", myId);
     statusText.setText("错误：未收到牌！").setColor(COLORS.textError);
     return;
   }
 
+  console.log("Hand found! Length:", finalHand.length);
+
   // Sort and display hand
-  const sortedHand = sortCards(hand);
-  const totalHandWidth = width * 0.6; // Max width for hand display
-  const cardOverlap = Math.max(55 * cardScale, 50); // Improved spacing for card clarity
-  const requiredWidth = sortedHand.length * cardOverlap - (cardOverlap - 70 * cardScale); // Calculate width needed
-  const startX = width / 2 - Math.min(totalHandWidth, requiredWidth) / 2; // Center the hand display
-  const displaySpacing = Math.min(cardOverlap, totalHandWidth / Math.max(1, sortedHand.length -1)); // Calculate spacing
+  const sortedHand = sortCards(finalHand);
+  const totalHandWidth = width * 0.8; // Increase max width for hand display
+  const cardWidth = 70 * cardScale;
+  const minSpacing = Math.max(cardWidth * 0.3, 20); // Minimum spacing between cards
+  const maxSpacing = Math.max(55 * cardScale, 50); // Maximum spacing for fewer cards
+  
+  // Calculate optimal spacing
+  let displaySpacing;
+  if (sortedHand.length <= 1) {
+    displaySpacing = 0;
+  } else {
+    const idealSpacing = totalHandWidth / (sortedHand.length - 1);
+    displaySpacing = Math.max(minSpacing, Math.min(maxSpacing, idealSpacing));
+  }
+  
+  // Calculate start position to center the hand
+  const totalWidth = (sortedHand.length - 1) * displaySpacing + cardWidth;
+  const startX = width / 2 - totalWidth / 2;
+  
+  console.log(`DEBUG: Hand with ${sortedHand.length} cards, spacing: ${displaySpacing.toFixed(1)}px, totalWidth: ${totalWidth.toFixed(1)}px`);
 
   for (let i = 0; i < sortedHand.length; i++) {
     let card = this.add.sprite(startX + i * displaySpacing, height * 0.85, "cards", sortedHand[i]).setInteractive(); // Lower hand slightly
@@ -703,6 +768,7 @@ function updatePlayerTexts(hands, currentPlayers) {
             // Update opponent card backs (if not 'You')
             if (pos !== myPosition) {
                 const displayPosIndex = (pos - myPosition + 4) % 4; // Index in positions array relative to 'You'
+                const maxVisibleCards = 15; // Move this definition to the top
 
                 const opponentActualHand = hands[player.id];
                 let currentDisplayCount = 0;
@@ -716,8 +782,6 @@ function updatePlayerTexts(hands, currentPlayers) {
                     // handCount is already 0 from earlier, text will show "0 cards"
                     // currentDisplayCount remains 0, so no cards will be drawn.
                 }
-
-                const maxVisibleCards = 15;
                 const backCardScale = 0.8 * cardScale; // Make backs slightly smaller but still clear
                 const backCardWidth = 70 * backCardScale;
                 const backCardHeight = 95 * backCardScale;

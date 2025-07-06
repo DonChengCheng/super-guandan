@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>掼蛋游戏素材预览</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .spritesheet-container {
+            border: 1px solid #ddd;
+            display: inline-block;
+            background: #fff;
+        }
+        .spritesheet {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        .card-back {
+            border: 1px solid #ddd;
+            margin: 10px;
+            background: #fff;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .button-preview {
+            border: 1px solid #ddd;
+            background: #fff;
+            padding: 5px;
+        }
+        .grid-overlay {
+            position: relative;
+            display: inline-block;
+        }
+        .grid-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .info {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .stat {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 掼蛋游戏素材预览</h1>
+        
+        <div class="info">
+            <h3>✨ 高质量素材特点</h3>
+            <ul>
+                <li>108张卡牌精灵表 (54张牌 × 2副)</li>
+                <li>高清渲染，支持缩放</li>
+                <li>统一尺寸：70×95像素</li>
+                <li>包含所有花色、数字、人头牌和王牌</li>
+                <li>专业级圆角设计</li>
+            </ul>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">108</div>
+                <div class="stat-label">总卡牌数</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">12×9</div>
+                <div class="stat-label">精灵表网格</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">840×635</div>
+                <div class="stat-label">精灵表尺寸</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">70×95</div>
+                <div class="stat-label">单张卡牌尺寸</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🃏 卡牌精灵表 (cards.png)</h2>
+            <div class="spritesheet-container">
+                <div class="grid-overlay">
+                    <img src="assets/cards.png" alt="卡牌精灵表" class="spritesheet">
+                    <svg class="grid-lines" viewBox="0 0 840 635">
+                        <!-- 垂直线 -->
+                        <g stroke="#ff0000" stroke-width="0.5" opacity="0.3">
+                            <line x1="70" y1="0" x2="70" y2="635"/>
+                            <line x1="140" y1="0" x2="140" y2="635"/>
+                            <line x1="210" y1="0" x2="210" y2="635"/>
+                            <line x1="280" y1="0" x2="280" y2="635"/>
+                            <line x1="350" y1="0" x2="350" y2="635"/>
+                            <line x1="420" y1="0" x2="420" y2="635"/>
+                            <line x1="490" y1="0" x2="490" y2="635"/>
+                            <line x1="560" y1="0" x2="560" y2="635"/>
+                            <line x1="630" y1="0" x2="630" y2="635"/>
+                            <line x1="700" y1="0" x2="700" y2="635"/>
+                            <line x1="770" y1="0" x2="770" y2="635"/>
+                        </g>
+                        <!-- 水平线 -->
+                        <g stroke="#ff0000" stroke-width="0.5" opacity="0.3">
+                            <line x1="0" y1="95" x2="840" y2="95"/>
+                            <line x1="0" y1="190" x2="840" y2="190"/>
+                            <line x1="0" y1="285" x2="840" y2="285"/>
+                            <line x1="0" y1="380" x2="840" y2="380"/>
+                            <line x1="0" y1="475" x2="840" y2="475"/>
+                            <line x1="0" y1="570" x2="840" y2="570"/>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+            <div class="info">
+                <strong>说明：</strong>红色网格线显示了每张卡牌的边界。每个网格 70×95 像素，总共 12列×9行 = 108张卡牌。
+                <br><strong>排列顺序：</strong>
+                <ol>
+                    <li>第1-52张：第一副牌（黑桃2-A，红心2-A，方块2-A，梅花2-A）</li>
+                    <li>第53-104张：第二副牌（相同顺序）</li>
+                    <li>第105-108张：王牌（小王×2，大王×2）</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎴 卡背纹理 (card_back.png)</h2>
+            <img src="assets/card_back.png" alt="卡背纹理" class="card-back">
+            <div class="info">
+                <strong>设计特点：</strong>
+                <ul>
+                    <li>深蓝色底色，金色边框</li>
+                    <li>钻石装饰图案</li>
+                    <li>中心"掼蛋"标识</li>
+                    <li>与卡牌正面相同的圆角设计</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎮 UI按钮素材</h2>
+            <div class="buttons">
+                <div class="button-preview">
+                    <img src="assets/play_button.png" alt="出牌按钮">
+                    <div>出牌按钮 (绿色)</div>
+                </div>
+                <div class="button-preview">
+                    <img src="assets/pass_button.png" alt="过牌按钮">
+                    <div>过牌按钮 (红色)</div>
+                </div>
+                <div class="button-preview">
+                    <img src="assets/tribute_button.png" alt="进贡按钮">
+                    <div>进贡按钮 (蓝色)</div>
+                </div>
+            </div>
+            <div class="info">
+                <strong>按钮特点：</strong>
+                <ul>
+                    <li>统一尺寸：120×40像素</li>
+                    <li>圆角设计，白色边框</li>
+                    <li>颜色编码：绿色=出牌，红色=过牌，蓝色=进贡</li>
+                    <li>支持透明背景</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔧 技术规格</h2>
+            <div class="info">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr style="background: #f8f9fa;">
+                        <th style="padding: 10px; border: 1px solid #ddd;">文件</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">尺寸</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">格式</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">用途</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd;">cards.png</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">840×635</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">PNG</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">108帧卡牌精灵表</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd;">card_back.png</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">70×95</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">PNG</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">卡背纹理</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd;">*_button.png</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">120×40</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">PNG</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">UI按钮</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎯 使用说明</h2>
+            <div class="info">
+                <h4>在 Phaser.js 中使用：</h4>
+                <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">
+// 加载精灵表
+this.load.spritesheet('cards', 'assets/cards.png', {
+    frameWidth: 70,
+    frameHeight: 95
+});
+
+// 加载卡背
+this.load.image('card_back', 'assets/card_back.png');
+
+// 使用特定卡牌（例如：第一张卡牌）
+this.add.sprite(x, y, 'cards', 0);
+                </pre>
+                
+                <h4>卡牌索引对照：</h4>
+                <ul>
+                    <li>帧 0-51：第一副牌</li>
+                    <li>帧 52-103：第二副牌</li>
+                    <li>帧 104-105：小王×2</li>
+                    <li>帧 106-107：大王×2</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
