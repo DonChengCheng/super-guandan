@@ -210,7 +210,9 @@ function create() {
   // --- End Buttons ---
 
 
-  socket = io("http://localhost:3000", {
+  // Automatically detect server URL (works for both local and production)
+  const serverUrl = window.location.origin;
+  socket = io(serverUrl, {
     // Connection stability settings
     reconnection: true,          // Enable auto-reconnection
     reconnectionAttempts: 10,    // Try 10 times before giving up
