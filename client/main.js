@@ -650,8 +650,7 @@ function startRound(state) {
   for (let i = 0; i < sortedHand.length; i++) {
     let card = this.add.sprite(startX + i * displaySpacing, height * 0.85, "cards", sortedHand[i]).setInteractive(); // Lower hand slightly
     card.setScale(cardScale);
-    // Enable smooth scaling and better rendering
-    card.setSmooth(true);
+    // Phaser 3 handles texture smoothing automatically
     card.setData('originalY', card.y); // Store original Y for selection animation
     card.on("pointerdown", () => selectCard.call(this, card));
     card.on("pointerover", () => { if (!card.getData('selected')) card.setTint(0xcccccc); });
@@ -722,8 +721,7 @@ function updateGame(state) {
       const tableStartX = width / 2 - (state.table.length - 1) * tableSpacing / 2;
       tableCards = state.table.map((frame, i) => {
           const card = this.add.sprite(tableStartX + i * tableSpacing, height / 2, "cards", frame)
-              .setScale(cardScale)
-              .setSmooth(true); // Enable smooth rendering
+              .setScale(cardScale);
           return card;
       });
   }
@@ -843,7 +841,6 @@ function updatePlayerTexts(hands, currentPlayers) {
 
                         let card = this.add.sprite(cardGlobalX, cardGlobalY, "cards", cardFrame) // Use "cards" spritesheet and frame
                             .setScale(backCardScale)
-                            .setSmooth(true)
                             .setOrigin(0, 0); // Origin is top-left for these calculations
                         opponentCards[pos].push(card);
                     }
