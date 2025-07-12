@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: super-guandan
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+    # 健康检查配置
+    healthCheckPath: /
+    # 自动部署配置（可选）
+    autoDeploy: true

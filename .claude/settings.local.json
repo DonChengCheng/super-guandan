@@ -45,7 +45,10 @@
       "Bash(find:*)",
       "Bash(npm run test:*)",
       "WebFetch(domain:docs.anthropic.com)",
-      "Bash(claude --version)"
+      "Bash(claude --version)",
+      "Bash(git push:*)",
+      "mcp__serena__list_memories",
+      "mcp__serena__read_memory"
     ],
     "deny": []
   }

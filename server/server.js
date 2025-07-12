@@ -33,7 +33,7 @@ app.use(express.static(path.join(__dirname, '../client')));
 
 // Card Deck (simplified for demo)
 const deck = Array.from({ length: 108 }, (_, i) => i); // Frames 0-107
-const baseUrl = 'http://localhost:3000';
+const baseUrl = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
 const RECONNECT_TIMEOUT = 30000; // 30 seconds timeout for reconnection
 
 // Game State
@@ -889,6 +889,8 @@ function checkTributeNeeded(finishOrder = gameState.finishOrder) {
   return null;
 }
 
-server.listen(3000, () =>
-  console.log('Server running on http://localhost:3000')
+// Use PORT environment variable for Render deployment
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () =>
+  console.log(`Server running on port ${PORT}`)
 );
